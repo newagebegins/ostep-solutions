@@ -13,6 +13,7 @@ int main(int argc, char* argv[argc+1]) {
     while (fgets(buf, buf_size, fp)) {
       fputs(buf, stdout);
     }
+    fclose(fp);
   }
   return 0;
 }
