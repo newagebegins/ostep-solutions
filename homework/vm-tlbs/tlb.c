@@ -24,7 +24,7 @@ int main(int argc, char* argv[argc+1]) {
   int page_size = getpagesize();
   int jump = page_size / sizeof(int);
   int max_i = num_pages * jump;
-  int* a = malloc(num_pages * page_size);
+  int* a = calloc(num_pages, page_size);
 
   struct timeval start, end;
 
