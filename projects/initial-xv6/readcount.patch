@@ -1,0 +1,125 @@
+diff --git a/Makefile b/Makefile
+index 09d790c..655384c 100644
+--- a/Makefile
++++ b/Makefile
+@@ -217,7 +217,7 @@ QEMUGDB = $(shell if $(QEMU) -help | grep -q '^-gdb'; \
+ 	then echo "-gdb tcp::$(GDBPORT)"; \
+ 	else echo "-s -p $(GDBPORT)"; fi)
+ ifndef CPUS
+-CPUS := 2
++CPUS := 1
+ endif
+ QEMUOPTS = -drive file=fs.img,index=1,media=disk,format=raw -drive file=xv6.img,index=0,media=disk,format=raw -smp $(CPUS) -m 512 $(QEMUEXTRA)
+ 
+diff --git a/defs.h b/defs.h
+index 82fb982..8517d01 100644
+--- a/defs.h
++++ b/defs.h
+@@ -33,6 +33,8 @@ void            fileinit(void);
+ int             fileread(struct file*, char*, int n);
+ int             filestat(struct file*, struct stat*);
+ int             filewrite(struct file*, char*, int n);
++extern uint readcount;
++extern struct spinlock readcountlock;
+ 
+ // fs.c
+ void            readsb(int dev, struct superblock *sb);
+diff --git a/file.c b/file.c
+index 24b32c2..4f33f6f 100644
+--- a/file.c
++++ b/file.c
+@@ -16,10 +16,14 @@ struct {
+   struct file file[NFILE];
+ } ftable;
+ 
++uint readcount;
++struct spinlock readcountlock;
++
+ void
+ fileinit(void)
+ {
+   initlock(&ftable.lock, "ftable");
++  initlock(&readcountlock, "readcount");
+ }
+ 
+ // Allocate a file structure.
+diff --git a/syscall.c b/syscall.c
+index ee85261..c067da8 100644
+--- a/syscall.c
++++ b/syscall.c
+@@ -103,6 +103,7 @@ extern int sys_unlink(void);
+ extern int sys_wait(void);
+ extern int sys_write(void);
+ extern int sys_uptime(void);
++extern int sys_getreadcount(void);
+ 
+ static int (*syscalls[])(void) = {
+ [SYS_fork]    sys_fork,
+@@ -126,6 +127,7 @@ static int (*syscalls[])(void) = {
+ [SYS_link]    sys_link,
+ [SYS_mkdir]   sys_mkdir,
+ [SYS_close]   sys_close,
++[SYS_getreadcount] sys_getreadcount,
+ };
+ 
+ void
+diff --git a/syscall.h b/syscall.h
+index bc5f356..c5ebb23 100644
+--- a/syscall.h
++++ b/syscall.h
+@@ -20,3 +20,4 @@
+ #define SYS_link   19
+ #define SYS_mkdir  20
+ #define SYS_close  21
++#define SYS_getreadcount 22
+diff --git a/sysfile.c b/sysfile.c
+index bfe61b7..e01ff41 100644
+--- a/sysfile.c
++++ b/sysfile.c
+@@ -73,6 +73,10 @@ sys_read(void)
+   int n;
+   char *p;
+ 
++  acquire(&readcountlock);
++  readcount++;
++  release(&readcountlock);
++
+   if(argfd(0, 0, &f) < 0 || argint(2, &n) < 0 || argptr(1, &p, n) < 0)
+     return -1;
+   return fileread(f, p, n);
+@@ -442,3 +446,14 @@ sys_pipe(void)
+   fd[1] = fd1;
+   return 0;
+ }
++
++int
++sys_getreadcount(void)
++{
++  int xreadcount;
++
++  acquire(&readcountlock);
++  xreadcount = readcount;
++  release(&readcountlock);
++  return xreadcount;
++}
+diff --git a/user.h b/user.h
+index 4f99c52..7886468 100644
+--- a/user.h
++++ b/user.h
+@@ -23,6 +23,7 @@ int getpid(void);
+ char* sbrk(int);
+ int sleep(int);
+ int uptime(void);
++int getreadcount(void);
+ 
+ // ulib.c
+ int stat(const char*, struct stat*);
+diff --git a/usys.S b/usys.S
+index 8bfd8a1..7af84de 100644
+--- a/usys.S
++++ b/usys.S
+@@ -29,3 +29,4 @@ SYSCALL(getpid)
+ SYSCALL(sbrk)
+ SYSCALL(sleep)
+ SYSCALL(uptime)
++SYSCALL(getreadcount)
