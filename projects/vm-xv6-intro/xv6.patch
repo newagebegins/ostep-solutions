@@ -1,0 +1,221 @@
+diff --git a/Makefile b/Makefile
+index b96c85e..1814dec 100644
+--- a/Makefile
++++ b/Makefile
+@@ -55,7 +55,7 @@ OBJDUMP := objdump
+ ################################################################################
+ 
+ # If the makefile can't find QEMU, specify its path here
+-QEMU := qemu-system-x86_64
++QEMU := qemu-system-i386
+ 
+ # Try to infer the correct QEMU if not specified
+ ifndef QEMU
+@@ -82,7 +82,7 @@ QEMUGDB := $(shell if $(QEMU) -help | grep -q '^-gdb'; \
+ 
+ # number of CPUs to emulate in QEMU
+ ifndef CPUS
+-CPUS := 2
++CPUS := 1
+ endif
+ 
+ QEMUOPTS := -hdb fs.img xv6.img -smp $(CPUS)
+diff --git a/include/syscall.h b/include/syscall.h
+index c55cec2..b2559b3 100644
+--- a/include/syscall.h
++++ b/include/syscall.h
+@@ -23,5 +23,7 @@
+ #define SYS_sbrk   19
+ #define SYS_sleep  20
+ #define SYS_uptime 21
++#define SYS_mprotect   22
++#define SYS_munprotect 23
+ 
+ #endif // _SYSCALL_H_
+diff --git a/kernel/defs.h b/kernel/defs.h
+index c12f8ff..c0ca93f 100644
+--- a/kernel/defs.h
++++ b/kernel/defs.h
+@@ -168,6 +168,8 @@ pde_t*          copyuvm(pde_t*, uint);
+ void            switchuvm(struct proc*);
+ void            switchkvm(void);
+ int             copyout(pde_t*, uint, void*, uint);
++int             mprotect(void*, int);
++int             munprotect(void*, int);
+ 
+ // number of elements in fixed-size array
+ #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+diff --git a/kernel/exec.c b/kernel/exec.c
+index 05f80f8..0e9fd71 100644
+--- a/kernel/exec.c
++++ b/kernel/exec.c
+@@ -32,7 +32,7 @@ exec(char *path, char **argv)
+     goto bad;
+ 
+   // Load program into memory.
+-  sz = 0;
++  sz = 0x1000;
+   for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
+     if(readi(ip, (char*)&ph, off, sizeof(ph)) != sizeof(ph))
+       goto bad;
+diff --git a/kernel/proc.c b/kernel/proc.c
+index 8e20984..ed6b205 100644
+--- a/kernel/proc.c
++++ b/kernel/proc.c
+@@ -442,5 +442,3 @@ procdump(void)
+     cprintf("\n");
+   }
+ }
+-
+-
+diff --git a/kernel/syscall.c b/kernel/syscall.c
+index 28c8308..3d72d8a 100644
+--- a/kernel/syscall.c
++++ b/kernel/syscall.c
+@@ -103,6 +103,8 @@ static int (*syscalls[])(void) = {
+ [SYS_wait]    sys_wait,
+ [SYS_write]   sys_write,
+ [SYS_uptime]  sys_uptime,
++[SYS_mprotect]   sys_mprotect,
++[SYS_munprotect] sys_munprotect,
+ };
+ 
+ // Called on a syscall trap. Checks that the syscall number (passed via eax)
+diff --git a/kernel/sysfunc.h b/kernel/sysfunc.h
+index ee9dafd..9763612 100644
+--- a/kernel/sysfunc.h
++++ b/kernel/sysfunc.h
+@@ -23,5 +23,7 @@ int sys_unlink(void);
+ int sys_wait(void);
+ int sys_write(void);
+ int sys_uptime(void);
++int sys_mprotect(void);
++int sys_munprotect(void);
+ 
+ #endif // _SYSFUNC_H_
+diff --git a/kernel/sysproc.c b/kernel/sysproc.c
+index 82b54f9..cc9b804 100644
+--- a/kernel/sysproc.c
++++ b/kernel/sysproc.c
+@@ -88,3 +88,23 @@ sys_uptime(void)
+   release(&tickslock);
+   return xticks;
+ }
++
++static int mprot(int protect) {
++  char *addr;
++  int len;
++
++  if(argptr(0, &addr, sizeof *addr) < 0 || argint(1, &len) < 0)
++    return -1;
++
++  if (protect)
++    return mprotect(addr, len);
++  return munprotect(addr, len);
++}
++
++int sys_mprotect(void) {
++  return mprot(1);
++}
++
++int sys_munprotect(void) {
++  return mprot(0);
++}
+diff --git a/kernel/vm.c b/kernel/vm.c
+index 54d4bf4..80b9161 100644
+--- a/kernel/vm.c
++++ b/kernel/vm.c
+@@ -306,7 +306,7 @@ copyuvm(pde_t *pgdir, uint sz)
+ 
+   if((d = setupkvm()) == 0)
+     return 0;
+-  for(i = 0; i < sz; i += PGSIZE){
++  for(i = 0x1000; i < sz; i += PGSIZE){
+     if((pte = walkpgdir(pgdir, (void*)i, 0)) == 0)
+       panic("copyuvm: pte should exist");
+     if(!(*pte & PTE_P))
+@@ -315,7 +315,9 @@ copyuvm(pde_t *pgdir, uint sz)
+     if((mem = kalloc()) == 0)
+       goto bad;
+     memmove(mem, (char*)pa, PGSIZE);
+-    if(mappages(d, (void*)i, PGSIZE, PADDR(mem), PTE_W|PTE_U) < 0)
++    int flags = PTE_U;
++    if (*pte & PTE_W) flags |= PTE_W;
++    if(mappages(d, (void*)i, PGSIZE, PADDR(mem), flags) < 0)
+       goto bad;
+   }
+   return d;
+@@ -364,3 +366,29 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
+   }
+   return 0;
+ }
++
++static int mprot(void* addr, int len, int protect) {
++  if((uint)addr % PGSIZE != 0 || len <= 0)
++    return -1;
++
++  for (; len > 0; addr += PGSIZE, len--) {
++    pte_t* pte = walkpgdir(proc->pgdir, addr, 0);
++    if (!pte || !(*pte & PTE_P))
++      return -1;
++    if (protect)
++      *pte &= ~PTE_W;
++    else
++      *pte |= PTE_W;
++  }
++  lcr3(PADDR(proc->pgdir));
++
++  return 0;
++}
++
++int mprotect(void *addr, int len) {
++  return mprot(addr, len, 1);
++}
++
++int munprotect(void *addr, int len) {
++  return mprot(addr, len, 0);
++}
+diff --git a/user/makefile.mk b/user/makefile.mk
+index 26f5b52..9e04f1c 100644
+--- a/user/makefile.mk
++++ b/user/makefile.mk
+@@ -10,6 +10,7 @@ USER_PROGS := \
+ 	ln\
+ 	ls\
+ 	mkdir\
++	mprotecttest\
+ 	null\
+ 	rm\
+ 	sh\
+@@ -74,7 +75,7 @@ USER_LDFLAGS += --omagic
+ USER_LDFLAGS += --entry=main
+ 
+ # location in memory where the program will be loaded
+-USER_LDFLAGS += --section-start=.text=0x0
++USER_LDFLAGS += --section-start=.text=0x1000
+ 
+ user/bin:
+ 	mkdir -p user/bin
+diff --git a/user/user.h b/user/user.h
+index 2b68ee0..85d99e9 100644
+--- a/user/user.h
++++ b/user/user.h
+@@ -25,6 +25,8 @@ int getpid(void);
+ char* sbrk(int);
+ int sleep(int);
+ int uptime(void);
++int mprotect(void *addr, int len);
++int munprotect(void *addr, int len);
+ 
+ // user library functions (ulib.c)
+ int stat(char*, struct stat*);
+diff --git a/user/usys.S b/user/usys.S
+index 8bfd8a1..42f7a42 100644
+--- a/user/usys.S
++++ b/user/usys.S
+@@ -29,3 +29,5 @@ SYSCALL(getpid)
+ SYSCALL(sbrk)
+ SYSCALL(sleep)
+ SYSCALL(uptime)
++SYSCALL(mprotect)
++SYSCALL(munprotect)
