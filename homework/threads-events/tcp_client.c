@@ -15,8 +15,10 @@ int main(void) {
     .sin_port = htons(9002),
     .sin_addr.s_addr = INADDR_ANY,
   };
+  printf("Connecting...\n");
   if (connect(sock, (struct sockaddr*) &address, sizeof(address)) != 0) handle_error("connect");
   char response[512];
+  printf("Receiving...\n");
   if (recv(sock, response, sizeof(response), 0) == -1) handle_error("recv");
   printf("Server response: %s\n", response);
   close(sock);
