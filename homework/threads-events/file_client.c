@@ -9,6 +9,8 @@
 
 #define handle_error(msg) do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
+char buf[1024*1024];
+
 int main(int argc, char* argv[argc+1]) {
   if (argc != 2) {
     printf("usage: file_client <file-path>\n");
@@ -28,7 +30,6 @@ int main(int argc, char* argv[argc+1]) {
   printf("Sending file path...\n");
   if (send(sock, file_path, strlen(file_path)+1, 0) < 0)
     handle_error("send");
-  char buf[64];
   printf("Receiving...\n");
   for (;;) {
     ssize_t read_bytes = read(sock, buf, sizeof(buf));
