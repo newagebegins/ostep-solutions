@@ -25,6 +25,8 @@
 #define Pthread_cond_wait(condp, mutexp) assert(pthread_cond_wait(condp, mutexp) == 0)
 #define Pthread_cond_signal(condp) assert(pthread_cond_signal(condp) == 0)
 
+#define Write(fildes, bufp, nbyte) assert(write(fildes, bufp, nbyte) != -1)
+
 #define NUM_ZIP_THREADS 3
 #define NUM_CHUNKS (NUM_ZIP_THREADS * 2)
 #define MAX_CHUNK_SIZE 1024*1024
@@ -138,10 +140,7 @@ void* print(void* arg) {
 
     if (chunk->finish) {
       Debug_print("print: finish at zipped chunk %zu\n", next % NUM_ZIPPED_CHUNKS);
-      if (write(STDOUT_FILENO, &prev_last_run, sizeof(struct run)) < 0) {
-        perror("write");
-        exit(EXIT_FAILURE);
-      }
+      Write(STDOUT_FILENO, &prev_last_run, sizeof(struct run));
       Pthread_mutex_unlock(&chunk->mutex);
       return 0;
     }
@@ -152,19 +151,13 @@ void* print(void* arg) {
       if (prev_last_run.byte == chunk->runs[0].byte) {
         chunk->runs[0].length += prev_last_run.length;
       } else {
-        if (write(STDOUT_FILENO, &prev_last_run, sizeof(struct run)) < 0) {
-          perror("write");
-          exit(EXIT_FAILURE);
-        }
+        Write(STDOUT_FILENO, &prev_last_run, sizeof(struct run));
       }
     }
     prev_last_run = chunk->runs[chunk->num_runs - 1];
 
     if (chunk->num_runs > 1) {
-      if (write(STDOUT_FILENO, chunk->runs, (chunk->num_runs - 1) * sizeof(struct run)) < 0) {
-        perror("write");
-        exit(EXIT_FAILURE);
-      }
+      Write(STDOUT_FILENO, chunk->runs, (chunk->num_runs - 1) * sizeof(struct run));
     }
 
     chunk->index += NUM_ZIPPED_CHUNKS;
