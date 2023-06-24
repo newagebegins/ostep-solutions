@@ -1,3 +1,18 @@
+/*
+
+Parallel zip implementation notes:
+
+Main thread opens a file, splits it into chunks and puts them into the queue.
+Zip threads grab chunks from the queue, zip them and put the results into bins in `zipped_chunks` array.
+The bin is determined by the chunk's global index. Bin_index = chunk_index % #bins.
+Print thread sequentially grabs zipped chunks from bins and writes them to stdout.
+It makes sure to combine the last run of the previous chunk with the first run of the current chunk.
+For example, with two chunks:
+aaa|aaa
+We should get 6a, and not 3a3a.
+
+*/
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
