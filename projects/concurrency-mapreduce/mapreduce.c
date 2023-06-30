@@ -8,6 +8,7 @@
 #define Pthread_create(threadp, attrp, start_routinep, argp) assert(pthread_create(threadp, attrp, start_routinep, argp) == 0)
 #define Pthread_join(thread, value_ptr) assert(pthread_join(thread, value_ptr) == 0)
 
+#define Pthread_mutex_init(mutexp, attrp) assert(pthread_mutex_init(mutexp, attrp) == 0)
 #define Pthread_mutex_lock(mutexp) assert(pthread_mutex_lock(mutexp) == 0)
 #define Pthread_mutex_unlock(mutexp) assert(pthread_mutex_unlock(mutexp) == 0)
 
@@ -23,6 +24,11 @@ struct key {
   struct key* next;
 };
 
+struct bucket {
+  pthread_mutex_t lock;
+  struct key* keys;
+};
+
 static int argc = 0;
 static char** argv = 0;
 static Mapper map = 0;
@@ -33,7 +39,7 @@ static int num_reducers = 0;
 static pthread_mutex_t file_mutex = PTHREAD_MUTEX_INITIALIZER;
 static size_t next_file = 1;
 
-static struct key** buckets = 0;
+static struct bucket* buckets = 0;
 
 unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
   unsigned long hash = 5381;
@@ -45,69 +51,62 @@ unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
 
 void MR_Emit(char *key, char *value) {
   unsigned long partition_number = partition(key, num_reducers);
-  if (buckets[partition_number]) {
-    struct key* p = buckets[partition_number];
-    struct key* prev_key = 0;
-    while (p) {
-      int cmp = strcmp(key, p->id);
-      if (cmp == 0) {
-        assert(p->values);
-        struct value* v = malloc(sizeof *v);
-        assert(v);
-        v->text = strdup(value);
-        assert(v->text);
-        v->next = p->values;
-        p->values = v;
-        return;
-      } else if (cmp < 0) {
-        struct key* k = malloc(sizeof *k);
-        assert(k);
-        k->used_values = 0;
-        k->id = strdup(key);
-        assert(k->id);
-        k->values = malloc(sizeof *(k->values));
-        assert(k->values);
-        k->values->text = strdup(value);
-        assert(k->values->text);
-        k->values->next = 0;
-        if (prev_key) {
-          k->next = prev_key->next;
-          prev_key->next = k;
-        } else {
-          k->next = buckets[partition_number];
-          buckets[partition_number] = k;
-        }
-        return;
+  struct bucket* bucket = &buckets[partition_number];
+  Pthread_mutex_lock(&bucket->lock);
+  struct key* p = bucket->keys;
+  struct key* prev_key = 0;
+  while (p) {
+    int cmp = strcmp(key, p->id);
+    if (cmp == 0) {
+      assert(p->values);
+      struct value* v = malloc(sizeof *v);
+      assert(v);
+      v->text = strdup(value);
+      assert(v->text);
+      v->next = p->values;
+      p->values = v;
+      goto end;
+    } else if (cmp < 0) {
+      struct key* k = malloc(sizeof *k);
+      assert(k);
+      k->used_values = 0;
+      k->id = strdup(key);
+      assert(k->id);
+      k->values = malloc(sizeof *(k->values));
+      assert(k->values);
+      k->values->text = strdup(value);
+      assert(k->values->text);
+      k->values->next = 0;
+      if (prev_key) {
+        k->next = prev_key->next;
+        prev_key->next = k;
+      } else {
+        k->next = bucket->keys;
+        bucket->keys = k;
       }
-      prev_key = p;
-      p = p->next;
+      goto end;
     }
-    struct key* k = malloc(sizeof *k);
-    assert(k);
-    k->used_values = 0;
-    k->id = strdup(key);
-    assert(k->id);
-    k->values = malloc(sizeof *(k->values));
-    assert(k->values);
-    k->values->text = strdup(value);
-    assert(k->values->text);
-    k->values->next = 0;
-    k->next = prev_key->next; // 0
+    prev_key = p;
+    p = p->next;
+  }
+  struct key* k = malloc(sizeof *k);
+  assert(k);
+  k->used_values = 0;
+  k->id = strdup(key);
+  assert(k->id);
+  k->values = malloc(sizeof *(k->values));
+  assert(k->values);
+  k->values->text = strdup(value);
+  assert(k->values->text);
+  k->values->next = 0;
+  k->next = 0;
+  if (prev_key) {
     prev_key->next = k;
   } else {
-    struct key* k = malloc(sizeof *k);
-    assert(k);
-    k->used_values = 0;
-    k->id = strdup(key);
-    assert(k->id);
-    k->values = malloc(sizeof k->values[0]);
-    assert(k->values);
-    k->values->text = strdup(value);
-    assert(k->values->text);
-    k->values->next = 0;
-    k->next = 0;
-    buckets[partition_number] = k;
+    bucket->keys = k;
   }
+end:
+  Pthread_mutex_unlock(&bucket->lock);
 }
 
 static void* mapper(void* arg) {
@@ -126,7 +125,7 @@ static void* mapper(void* arg) {
 }
 
 char* get_next_value(char *key, int partition_number) {
-  for (struct key* k = buckets[partition_number]; k; k = k->next) {
+  for (struct key* k = buckets[partition_number].keys; k; k = k->next) {
     if (strcmp(key, k->id) == 0) {
       struct value* v = k->values;
       if (v) {
@@ -144,7 +143,7 @@ char* get_next_value(char *key, int partition_number) {
 
 static void* reducer(void* arg) {
   size_t partition_number = (size_t) arg;
-  for (struct key* k = buckets[partition_number]; k; k = k->next) {
+  for (struct key* k = buckets[partition_number].keys; k; k = k->next) {
     reduce(k->id, get_next_value, partition_number);
   }
   return 0;
@@ -169,8 +168,11 @@ void MR_Run(int _argc, char *_argv[],
   assert(num_reducers > 0);
   assert(partition);
 
-  buckets = calloc(num_reducers, sizeof buckets[0]);
+  buckets = malloc(num_reducers * sizeof buckets[0]);
   assert(buckets);
+  for (int i = 0; i < num_reducers; ++i) {
+    Pthread_mutex_init(&buckets[i].lock, 0);
+  }
 
   pthread_t mappers[num_mappers];
   for (int i = 0; i < num_mappers; ++i) {
