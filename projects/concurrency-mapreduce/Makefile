@@ -1,6 +1,6 @@
 my_flags = -O2 -Wall -Werror
 
-all: wordcount wordcount_array wordcount_array_values wordcount_hash wordcount_big_files_first
+all: wordcount wordcount_array wordcount_array_values wordcount_hash wordcount_big_files_first wordcount_hash_table
 
 wordcount: wordcount.c mapreduce.o
 	clang $(my_flags) -o wordcount wordcount.c mapreduce.o
@@ -32,5 +32,11 @@ wordcount_big_files_first: wordcount.c mapreduce_big_files_first.o
 mapreduce_big_files_first.o: mapreduce_big_files_first.c mapreduce.h
 	clang -c $(my_flags) -o mapreduce_big_files_first.o mapreduce_big_files_first.c
 
+wordcount_hash_table: wordcount.c mapreduce_hash_table.o
+	clang $(my_flags) -o wordcount_hash_table wordcount.c mapreduce_hash_table.o
+
+mapreduce_hash_table.o: mapreduce_hash_table.c mapreduce.h
+	clang -c $(my_flags) -o mapreduce_hash_table.o mapreduce_hash_table.c
+
 clean:
-	rm -f wordcount wordcount_array wordcount_array_values wordcount_hash wordcount_big_files_first mapreduce.o mapreduce_array.o mapreduce_array_values.o mapreduce_hash.o mapreduce_big_files_first.o
+	rm -f wordcount wordcount_array wordcount_array_values wordcount_hash wordcount_big_files_first wordcount_hash_table mapreduce.o mapreduce_array.o mapreduce_array_values.o mapreduce_hash.o mapreduce_big_files_first.o mapreduce_hash_table.o
