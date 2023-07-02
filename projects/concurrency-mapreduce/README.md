@@ -4,6 +4,7 @@
 * `wordcount_array` (uses `mapreduce_array.c`) — same as `wordcount`, but stores keys in growable arrays
 * `wordcount_array_values` (uses `mapreduce_array_values.c`) — same as `wordcount_array`, but also stores values in growable arrays
 * `wordcount_hash (uses mapreduce_hash.c)` — same as `wordcount_array`, but uses key hashes instead of `strcmp` (`strcmp` is still used for sorting)
+* `wordcount_big_files_first` (uses `mapreduce_big_files_first.c`) — same as `wordcount_array`, but schedules big files first (observed wins are insignificant)
 
 Example test command:
 ```
