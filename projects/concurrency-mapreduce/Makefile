@@ -1,4 +1,4 @@
-my_flags = -O -Wall -Werror
+my_flags = -O2 -Wall -Werror
 
 all: wordcount wordcount_array wordcount_array_values wordcount_hash
 

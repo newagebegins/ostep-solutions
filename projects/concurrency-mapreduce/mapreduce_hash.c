@@ -52,6 +52,8 @@ unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
   return hash % num_partitions;
 }
 
+// djb2 hash
+// http://www.cse.yorku.ca/~oz/hash.html
 unsigned long hash(unsigned char *str) {
   unsigned long hash = 5381;
   int c;
