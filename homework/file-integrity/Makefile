@@ -1,5 +1,5 @@
 CC = clang
-CFLAGS = -Wall
+CFLAGS = -Wall -O2
 
 .PHONY: all
 

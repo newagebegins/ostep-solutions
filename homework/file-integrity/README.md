@@ -1,6 +1,8 @@
 # Chapter 45 (Data Integrity and Protection)
 
-## 1
+## Homework (Simulation)
+
+### 1
 
 ```
 python3 ./checksum.py
@@ -27,7 +29,7 @@ Fletcher: s1 = 0, s2 = 0
           s2 = (123 + 73) % 255 = 196
 ```
 
-## 2
+### 2
 
 ```
 python3 ./checksum.py -s 123
@@ -77,7 +79,7 @@ Fletcher: s1 = (0+245)%255 = 245
           s2 = (40+167)%255 = 207
 ```
 
-## 3
+### 3
 
 ```
 python3 ./checksum.py -D 1,2,4,8 -c
@@ -95,7 +97,7 @@ Fletcher(a,b):   15, 26   (0b00001111,0b00011010)
 
 When carry is 0 for each binary place.
 
-## 4
+### 4
 
 ```
 python3 ./checksum.py -D 1,2,4,9 -c
@@ -117,7 +119,7 @@ Fletcher(a,b):   16, 27   (0b00010000,0b00011011)
 
 When at least one carry is 1 for some binary place.
 
-## 5
+### 5
 
 ```
 python3 ./checksum.py -D 6,5,3,4 -c
@@ -157,7 +159,7 @@ Or equivalently:
 a1 + b1 + c1 + d1 = a2 + b2 + c2 + d2 (mod 256)
 ```
 
-## 6
+### 6
 
 ```
 python3 ./checksum.py -D 1,2,4,8 -c    
@@ -187,7 +189,7 @@ Fletcher(a,b):   30, 64   (0b00011110,0b01000000)
 
 When each binary position has the same parity (odd or even number of ones).
 
-## 7
+### 7
 
 ```
 python3 ./checksum.py -D 1,2,3,4       
@@ -240,7 +242,7 @@ For Add and Xor order of the bytes doesn't matter, for Fletcher it does matter.
 
 Fletcher can detect more corruptions: when bytes have correct value, but are in the wrong order.
 
-## 8
+### 8
 
 ```
 python3 ./checksum.py -D 0,1,2,3 -c
@@ -265,3 +267,19 @@ Add:              5       (0b00000101)
 Xor:            255       (0b11111111)
 Fletcher(a,b):    6, 10   (0b00000110,0b00001010)
 ```
+
+## Homework (Code)
+
+### 3
+
+> How does performance change as the size of the input file changes?
+
+Linearly.
+
+> Which should you use if you care about performance?
+
+Xor, because it is ~10 times faster than Fletcher.
+
+> About checking ability?
+
+Fletcher, because it can detect byte swaps.
