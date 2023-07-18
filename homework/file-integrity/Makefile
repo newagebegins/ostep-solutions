@@ -3,4 +3,5 @@ CFLAGS = -Wall
 
 .PHONY: all
 
-all: check-xor
+all: check-xor      \
+     check-fletcher
