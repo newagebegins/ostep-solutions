@@ -3,4 +3,4 @@ CFLAGS = -Wall -O2
 
 .PHONY: all
 
-all: check-xor check-fletcher check-crc
+all: check-xor check-fletcher check-crc create-csum check-csum
