@@ -283,3 +283,13 @@ Xor, because it is ~10 times faster than Fletcher.
 > About checking ability?
 
 Fletcher, because it can detect byte swaps.
+
+### 4
+
+> How is its performance as compared to the simple XOR and Fletcher?
+
+My implementation of CRC is ~20 times slower than XOR and ~3 times slower than Fletcher.
+
+> How about its checking ability?
+
+CRC is much better at catching corruptions than XOR or Fletcher. It can detect burst errors (a sequence of possibly erroneous bits).
