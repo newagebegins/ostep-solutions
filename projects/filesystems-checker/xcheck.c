@@ -64,12 +64,13 @@ int main(int argc, char* argv[argc+1]) {
     }
     if (ip->type != 0) {
       for (int i = 0; i < NDIRECT; ++i) {
-        if (ip->addrs[i]) {
-          if (ip->addrs[i] < data_start || ip->addrs[i] > data_end) {
+        uint block = ip->addrs[i];
+        if (block) {
+          if (block < data_start || block > data_end) {
             fprintf(stderr, "ERROR: bad direct address in inode\n");
             return 1;
           }
-          if (!bitmap[ip->addrs[i]]) {
+          if (!bitmap[block]) {
             fprintf(stderr, "ERROR: address used by inode but marked free in bitmap\n");
             return 1;
           }
@@ -80,15 +81,15 @@ int main(int argc, char* argv[argc+1]) {
           fprintf(stderr, "ERROR: bad indirect address in inode\n");
           return 1;
         }
-        uint* indirect_start = (uint*) (fs + ip->addrs[NDIRECT]*BSIZE);
-        uint* indirect_end = indirect_start + BSIZE/sizeof(uint);
-        for (uint* p = indirect_start; p < indirect_end; ++p) {
-          if (*p) {
-            if (*p < data_start || *p > data_end) {
+        uint* indirect_addrs = (uint*) (fs + ip->addrs[NDIRECT]*BSIZE);
+        for (uint i = 0; i < BSIZE/sizeof(uint); ++i) {
+          uint block = indirect_addrs[i];
+          if (block) {
+            if (block < data_start || block > data_end) {
               fprintf(stderr, "ERROR: bad indirect address in inode\n");
               return 1;
             }
-            if (!bitmap[*p]) {
+            if (!bitmap[block]) {
               fprintf(stderr, "ERROR: address used by inode but marked free in bitmap\n");
               return 1;
             }
