@@ -5,6 +5,7 @@
 #include <sys/mman.h>
 #include <assert.h>
 #include <string.h>
+#include <stdlib.h>
 
 #define stat xv6_stat      // avoid clash with host struct stat
 #define dirent xv6_dirent  // avoid clash with host struct dirent
@@ -47,6 +48,14 @@ int main(int argc, char* argv[argc+1]) {
 
   struct dinode* inodes = (struct dinode*) (fs + IBLOCK(0)*BSIZE);
 
+  uchar* bitmap = malloc(sb->size * sizeof(uchar));
+  for (uint b = 0; b < sb->size; ++b) {
+    uchar* bp = fs + BBLOCK(b, sb->ninodes)*BSIZE;
+    int bi = b % BPB;
+    int m = 1 << (bi % 8);
+    bitmap[b] = !!(bp[bi/8] & m);
+  }
+
   for (ushort inum = 0; inum < sb->ninodes; ++inum) {
     struct dinode* ip = &inodes[inum];
     if (ip->type != 0 && ip->type != T_DIR && ip->type != T_FILE && ip->type != T_DEV) {
@@ -60,12 +69,7 @@ int main(int argc, char* argv[argc+1]) {
             fprintf(stderr, "ERROR: bad direct address in inode\n");
             return 1;
           }
-          // check that address is marked in use in the bitmap
-          uint b = ip->addrs[i];
-          uchar* bp = fs + BBLOCK(b, sb->ninodes)*BSIZE;
-          int bi = b % BPB;
-          int m = 1 << (bi % 8);
-          if ((bp[bi/8] & m) == 0) {
+          if (!bitmap[ip->addrs[i]]) {
             fprintf(stderr, "ERROR: address used by inode but marked free in bitmap\n");
             return 1;
           }
@@ -84,12 +88,7 @@ int main(int argc, char* argv[argc+1]) {
               fprintf(stderr, "ERROR: bad indirect address in inode\n");
               return 1;
             }
-            // check that address is marked in use in the bitmap
-            uint b = *p;
-            uchar* bp = fs + BBLOCK(b, sb->ninodes)*BSIZE;
-            int bi = b % BPB;
-            int m = 1 << (bi % 8);
-            if ((bp[bi/8] & m) == 0) {
+            if (!bitmap[*p]) {
               fprintf(stderr, "ERROR: address used by inode but marked free in bitmap\n");
               return 1;
             }
