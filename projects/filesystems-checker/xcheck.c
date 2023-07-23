@@ -45,11 +45,10 @@ int main(int argc, char* argv[argc+1]) {
   uint data_start = 2 + num_inode_blocks + num_bitmap_blocks;
   uint data_end = sb->size - 1;
 
-  struct dinode* inodes_start = (struct dinode*) (fs + IBLOCK(0)*BSIZE);
-  struct dinode* inodes_end = inodes_start + sb->ninodes;
-  ushort inum = 0;
+  struct dinode* inodes = (struct dinode*) (fs + IBLOCK(0)*BSIZE);
 
-  for (struct dinode* ip = inodes_start; ip < inodes_end; ++ip, ++inum) {
+  for (ushort inum = 0; inum < sb->ninodes; ++inum) {
+    struct dinode* ip = &inodes[inum];
     if (ip->type != 0 && ip->type != T_DIR && ip->type != T_FILE && ip->type != T_DEV) {
       fprintf(stderr, "ERROR: bad inode\n");
       return 1;
@@ -115,7 +114,7 @@ int main(int argc, char* argv[argc+1]) {
     }
   }
 
-  struct dinode* root_inode = inodes_start + ROOTINO;
+  struct dinode* root_inode = &inodes[ROOTINO];
   if (root_inode->type != T_DIR || !root_inode->addrs[0]) {
     fprintf(stderr, "ERROR: root directory does not exist\n");
     return 1;
