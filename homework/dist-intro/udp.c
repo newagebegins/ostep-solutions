@@ -5,8 +5,8 @@
 int UDP_Open(int port) {
     int fd;           
     if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
-	perror("socket");
-	return 0;
+        perror("socket");
+        return 0;
     }
 
     // set up the bind
@@ -18,9 +18,9 @@ int UDP_Open(int port) {
     my_addr.sin_addr.s_addr = INADDR_ANY;
 
     if (bind(fd, (struct sockaddr *) &my_addr, sizeof(my_addr)) == -1) {
-	perror("bind");
-	close(fd);
-	return -1;
+        perror("bind");
+        close(fd);
+        return -1;
     }
 
     return fd;
@@ -30,7 +30,7 @@ int UDP_Open(int port) {
 int UDP_FillSockAddr(struct sockaddr_in *addr, char *hostname, int port) {
     bzero(addr, sizeof(struct sockaddr_in));
     if (hostname == NULL) {
-	return 0; // it's OK just to clear the address
+        return 0; // it's OK just to clear the address
     }
     
     addr->sin_family = AF_INET;          // host byte order
@@ -39,8 +39,8 @@ int UDP_FillSockAddr(struct sockaddr_in *addr, char *hostname, int port) {
     struct in_addr *in_addr;
     struct hostent *host_entry;
     if ((host_entry = gethostbyname(hostname)) == NULL) {
-	perror("gethostbyname");
-	return -1;
+        perror("gethostbyname");
+        return -1;
     }
     in_addr = (struct in_addr *) host_entry->h_addr;
     addr->sin_addr = *in_addr;
